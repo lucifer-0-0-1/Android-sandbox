@@ -1,0 +1,12 @@
+{
+  "profile": "generic_wasd_touch",
+  "comment": "Keymapper configuration for desktop Android gaming",
+  "mappings": [
+    { "key": "w", "touch_action": "swipe_up", "x": 0.2, "y": 0.7 },
+    { "key": "s", "touch_action": "swipe_down", "x": 0.2, "y": 0.7 },
+    { "key": "a", "touch_action": "swipe_left", "x": 0.2, "y": 0.7 },
+    { "key": "d", "touch_action": "swipe_right", "x": 0.2, "y": 0.7 },
+    { "key": "space", "touch_action": "tap", "x": 0.85, "y": 0.75 },
+    { "mouse": "left_click", "touch_action": "tap" }
+  ]
+}

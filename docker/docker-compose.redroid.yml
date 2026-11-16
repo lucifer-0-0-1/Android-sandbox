@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  redroid:
+    image: redroid/redroid:13.0.0-latest
+    container_name: redroid-sandbox
+    privileged: true
+    volumes:
+      - ./data:/data
+    ports:
+      - "5555:5555"
+    devices:
+      - "/dev/binderfs/binder:/dev/binder"
+      - "/dev/binderfs/hwbinder:/dev/hwbinder"
+      - "/dev/binderfs/vndbinder:/dev/vndbinder"
+      - "/dev/dri/renderD129:/dev/dri/renderD129"
+    command:
+      - androidboot.redroid_width=1080
+      - androidboot.redroid_height=1920
+      - androidboot.redroid_dpi=320
+      - androidboot.redroid_fps=60
+      - androidboot.redroid_gpu_mode=guest
+    restart: unless-stopped

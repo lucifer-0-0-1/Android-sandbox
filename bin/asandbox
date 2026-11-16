@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# bin/asandbox
+# Unified Android Sandbox Orchestrator for Linux
+set -euo pipefail
+
+SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+show_help() {
+    cat <<EOF
+Android Sandbox CLI Manager
+Lightweight, native, containerized Android on Linux (Waydroid + ReDroid)
+
+Usage: asandbox <command> [options]
+
+Core Commands:
+  setup              Run full initialization (binder, GPU, waydroid, libhoudini, anti-detection)
+  start              Start the primary Waydroid desktop container and session
+  stop               Stop the primary Waydroid container and session
+  status             Check status of BinderFS, GPU node, Waydroid, and ReDroid
+  ui                 Launch full tablet/phone UI launcher window
+
+App Management:
+  app list           List installed Android packages
+  app install <apk>  Install an APK into the sandbox
+  app launch <pkg>   Launch an Android app as an independent native desktop window
+
+Device & Anti-Detection:
+  spoof <profile>    Apply retail device fingerprint profile (default: pixel7)
+  sensors            Re-inject fake battery discharging state and LTE carrier metadata
+
+Disposable Sandboxes (ReDroid):
+  disposable start   Launch an isolated disposable Android container via Docker + scrcpy
+  disposable stop    Stop the disposable Android container
+  disposable reset   Wipe the disposable sandbox back to a clean slate
+
+Utilities:
+  shared             Open the host-container shared folder
+EOF
+}
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+    setup)
+        echo "=== Running Android Sandbox Full Setup ==="
+        bash "$SCRIPT_ROOT/scripts/01-setup-kernel-binder.sh"
+        bash "$SCRIPT_ROOT/scripts/02-configure-gpu.sh"
+        bash "$SCRIPT_ROOT/scripts/03-install-dependencies.sh"
+        bash "$SCRIPT_ROOT/scripts/04-init-waydroid.sh"
+        bash "$SCRIPT_ROOT/scripts/05-install-houdini-microg.sh"
+        bash "$SCRIPT_ROOT/scripts/06-setup-aurora-microg.sh"
+        bash "$SCRIPT_ROOT/scripts/07-spoof-device-profile.sh" "$SCRIPT_ROOT/config/device-profiles/pixel7.prop"
+        bash "$SCRIPT_ROOT/scripts/09-emulate-hardware-sensors.sh"
+        bash "$SCRIPT_ROOT/scripts/10-setup-desktop-experience.sh"
+        echo "[+] Complete setup finished successfully!"
+        ;;
+    start)
+        sudo systemctl start waydroid-container
+        waydroid session start &
+        echo "[+] Waydroid session started."
+        ;;
+    stop)
+        waydroid session stop 2>/dev/null || true
+        sudo systemctl stop waydroid-container 2>/dev/null || true
+        echo "[+] Waydroid session stopped."
+        ;;
+    status)
+        echo "=== Android Sandbox Status ==="
+        echo "BinderFS: $(mountpoint -q /dev/binderfs && echo 'ACTIVE' || echo 'INACTIVE')"
+        echo "Waydroid: $(waydroid status 2>/dev/null | grep -E 'Session|Container' || echo 'STOPPED')"
+        echo "GPU Node: $(cat "$SCRIPT_ROOT/config/gpu.conf" 2>/dev/null || echo 'NOT CONFIGURED')"
+        echo "Docker ReDroid: $(docker ps --filter 'name=redroid-sandbox' --format '{{.Status}}' 2>/dev/null || echo 'STOPPED')"
+        ;;
+    app)
+        sub="${1:-list}"
+        if [[ "$sub" == "install" ]]; then
+            waydroid app install "$2"
+        elif [[ "$sub" == "launch" ]]; then
+            waydroid app launch "$2"
+        else
+            waydroid app list
+        fi
+        ;;
+    ui)
+        waydroid show-full-ui
+        ;;
+    spoof)
+        profile="${1:-$SCRIPT_ROOT/config/device-profiles/pixel7.prop}"
+        bash "$SCRIPT_ROOT/scripts/07-spoof-device-profile.sh" "$profile"
+        ;;
+    sensors)
+        bash "$SCRIPT_ROOT/scripts/09-emulate-hardware-sensors.sh"
+        ;;
+    disposable)
+        bash "$SCRIPT_ROOT/scripts/11-manage-redroid-sandbox.sh" "$@"
+        ;;
+    shared)
+        mkdir -p "$SCRIPT_ROOT/shared"
+        xdg-open "$SCRIPT_ROOT/shared" 2>/dev/null || echo "Shared directory: $SCRIPT_ROOT/shared"
+        ;;
+    help|*)
+        show_help
+        ;;
+esac
