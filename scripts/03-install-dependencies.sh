@@ -4,7 +4,8 @@ set -euo pipefail
 
 echo "[*] Installing Waydroid, LXC, and platform tools via pacman..."
 
-sudo pacman -S --needed --noconfirm \
+# Refresh package databases first to avoid 404 errors on stale package versions
+sudo pacman -Sy --needed --noconfirm \
     waydroid \
     lxc \
     dnsmasq \
