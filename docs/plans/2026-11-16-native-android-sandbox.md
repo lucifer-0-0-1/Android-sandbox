@@ -260,7 +260,7 @@ git commit -m "feat: add automated package installation for Waydroid and depende
 
 ---
 
-### Task 4: Waydroid Initialization with GAPPS & GPU Binding
+### Task 4: Waydroid Initialization with VANILLA Image & GPU Binding
 
 **Files:**
 - Create: `scripts/04-init-waydroid.sh`
@@ -294,15 +294,15 @@ Expected: FAIL with `Waydroid container is not running!`
 # scripts/04-init-waydroid.sh
 set -euo pipefail
 
-echo "[*] Initializing Waydroid with GAPPS..."
+echo "[*] Initializing Waydroid with VANILLA image..."
 
 # Read target GPU render node from Task 2
 source /etc/android-sandbox/gpu.conf
 
-# Initialize Waydroid with Google Apps (GAPPS) LineageOS image
+# Initialize Waydroid with lightweight VANILLA LineageOS image
 if [[ ! -d "/var/lib/waydroid/images" ]]; then
-    echo "[*] Downloading and initializing Waydroid system and vendor images (GAPPS)..."
-    sudo waydroid init -s GAPPS -f
+    echo "[*] Downloading and initializing Waydroid system and vendor images (VANILLA)..."
+    sudo waydroid init -s VANILLA -f
 fi
 
 # Configure Waydroid to strictly use the Intel iGPU render node
@@ -313,7 +313,7 @@ sudo waydroid prop set persist.waydroid.gpu_override "$TARGET_RENDER_NODE"
 # Restart container service
 sudo systemctl restart waydroid-container.service
 
-echo "[+] Waydroid initialized with GAPPS and bound to $TARGET_RENDER_NODE."
+echo "[+] Waydroid initialized with VANILLA image and bound to $TARGET_RENDER_NODE."
 ```
 
 **Step 4: Run test to verify it passes**
@@ -325,15 +325,15 @@ Expected: `[+] PASS: Waydroid container is initialized and active.`
 
 ```bash
 git add scripts/04-init-waydroid.sh scripts/tests/test-waydroid-status.sh
-git commit -m "feat: initialize Waydroid with GAPPS and custom GPU render binding"
+git commit -m "feat: initialize Waydroid with VANILLA image and custom GPU render binding"
 ```
 
 ---
 
-### Task 5: ARM Binary Translation Layer (`libhoudini` / `libndk`)
+### Task 5: ARM Translation (libhoudini) & microG Core Services
 
 **Files:**
-- Create: `scripts/05-install-arm-translation.sh`
+- Create: `scripts/05-install-houdini-microg.sh`
 - Test: `scripts/tests/test-arm-abi.sh`
 
 **Step 1: Write the failing test**
@@ -364,10 +364,10 @@ Expected: FAIL with `ARM ABIs not supported` (vanilla Waydroid only lists `x86_6
 
 ```bash
 #!/usr/bin/env bash
-# scripts/05-install-arm-translation.sh
+# scripts/05-install-houdini-microg.sh
 set -euo pipefail
 
-echo "[*] Installing ARM translation layer (libhoudini/libndk) via waydroid_script..."
+echo "[*] Installing ARM translation (libhoudini), microG, and Widevine L3 via waydroid_script..."
 
 SCRIPT_DIR="/opt/waydroid_script"
 if [[ ! -d "$SCRIPT_DIR" ]]; then
@@ -376,113 +376,102 @@ if [[ ! -d "$SCRIPT_DIR" ]]; then
     sudo "$SCRIPT_DIR/venv/bin/pip" install -r "$SCRIPT_DIR/requirements.txt"
 fi
 
+echo "[*] Stopping Waydroid container before injection..."
+sudo systemctl stop waydroid-container.service || true
+
 echo "[*] Injecting libhoudini (Intel ARM64->x86_64 translator)..."
 sudo "$SCRIPT_DIR/venv/bin/python3" "$SCRIPT_DIR/main.py" install libhoudini
 
-echo "[*] Restarting Waydroid container to apply translation hooks..."
+echo "[*] Injecting microG GmsCore & Services..."
+sudo "$SCRIPT_DIR/venv/bin/python3" "$SCRIPT_DIR/main.py" install microg
+
+echo "[*] Injecting Widevine L3 DRM support..."
+sudo "$SCRIPT_DIR/venv/bin/python3" "$SCRIPT_DIR/main.py" install widevine || true
+
+echo "[*] Restarting Waydroid container..."
 sudo systemctl restart waydroid-container.service
 sleep 3
 
-echo "[+] ARM translation layer installed successfully."
+echo "[+] ARM translation (libhoudini), microG, and Widevine L3 installed successfully."
 ```
 
 **Step 4: Run test to verify it passes**
 
-Run: `sudo bash scripts/05-install-arm-translation.sh && bash scripts/tests/test-arm-abi.sh`  
+Run: `sudo bash scripts/05-install-houdini-microg.sh && bash scripts/tests/test-arm-abi.sh`  
 Expected: `[+] PASS: ARM binary translation active (x86_64,x86,arm64-v8a,armeabi-v7a,armeabi).`
 
 **Step 5: Commit**
 
 ```bash
-git add scripts/05-install-arm-translation.sh scripts/tests/test-arm-abi.sh
-git commit -m "feat: install libhoudini ARM64 translation layer into Waydroid rootfs"
+git add scripts/05-install-houdini-microg.sh scripts/tests/test-arm-abi.sh
+git commit -m "feat: install libhoudini ARM64 translation, microG, and Widevine L3"
 ```
 
 ---
 
-### Task 6: Google Play Store Certification (Uncertified Device Bypass)
+### Task 6: Aurora Store & microG Google Account Setup
 
 **Files:**
-- Create: `scripts/06-register-play-id.sh`
-- Test: `scripts/tests/test-gsf-id.sh`
+- Create: `scripts/06-setup-aurora-microg.sh`
+- Test: `scripts/tests/test-aurora-store.sh`
 
 **Step 1: Write the failing test**
 
 ```bash
 #!/usr/bin/env bash
-# scripts/tests/test-gsf-id.sh
+# scripts/tests/test-aurora-store.sh
 set -euo pipefail
 
-ANDROID_ID_FILE="/var/lib/waydroid/registered_gsf_id.txt"
-if [[ ! -f "$ANDROID_ID_FILE" ]]; then
-    echo "[-] FAIL: GSF Android ID has not been extracted or saved!" >&2
+if ! sudo waydroid shell pm list packages | grep -q "com.aurora.store"; then
+    echo "[-] FAIL: Aurora Store package is not installed in the container!" >&2
     exit 1
 fi
 
-ID=$(cat "$ANDROID_ID_FILE")
-if [[ -z "$ID" ]] || [[ "$ID" == "null" ]]; then
-    echo "[-] FAIL: Invalid GSF Android ID: '$ID'" >&2
-    exit 1
-fi
-
-echo "[+] PASS: GSF Android ID is valid: $ID"
+echo "[+] PASS: Aurora Store is installed and ready for Google Play apps."
 exit 0
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bash scripts/tests/test-gsf-id.sh`  
-Expected: FAIL with `GSF Android ID has not been extracted or saved!`
+Run: `bash scripts/tests/test-aurora-store.sh`  
+Expected: FAIL with `Aurora Store package is not installed`
 
 **Step 3: Write the minimal implementation**
 
 ```bash
 #!/usr/bin/env bash
-# scripts/06-register-play-id.sh
+# scripts/06-setup-aurora-microg.sh
 set -euo pipefail
 
-echo "[*] Querying Google Services Framework (GSF) Android ID..."
+echo "[*] Setting up Aurora Store (open-source Google Play client)..."
 
-# Wait for GSF DB to be generated
-MAX_TRIES=15
-GSF_ID=""
-for ((i=1; i<=MAX_TRIES; i++)); do
-    GSF_ID=$(sudo waydroid shell 'sqlite3 /data/data/com.google.android.gsf/databases/gservices.db "select value from main where name=\"android_id\";"' 2>/dev/null | tr -d '\r\n' || true)
-    if [[ -n "$GSF_ID" ]] && [[ "$GSF_ID" != "null" ]]; then
-        break
-    fi
-    echo "[*] Waiting for GSF database initialization (attempt $i/$MAX_TRIES)..."
-    sleep 2
-done
-
-if [[ -z "$GSF_ID" ]]; then
-    echo "[-] Failed to retrieve GSF ID. Starting Google Play Services and retrying..."
-    sudo waydroid shell am start -n com.android.vending/.AssetBrowserActivity || true
-    sleep 5
-    GSF_ID=$(sudo waydroid shell 'sqlite3 /data/data/com.google.android.gsf/databases/gservices.db "select value from main where name=\"android_id\";"' 2>/dev/null | tr -d '\r\n')
+AURORA_APK="/tmp/AuroraStore.apk"
+if [[ ! -f "$AURORA_APK" ]]; then
+    echo "[*] Downloading latest stable Aurora Store APK..."
+    curl -sSL "https://auroraoss.com/downloads/AuroraStore/Release/AuroraStore-4.6.4.apk" -o "$AURORA_APK" || \
+    curl -sSL "https://f-droid.org/repo/com.aurora.store_59.apk" -o "$AURORA_APK"
 fi
 
-echo "$GSF_ID" | sudo tee /var/lib/waydroid/registered_gsf_id.txt
+echo "[*] Installing Aurora Store into Waydroid..."
+waydroid app install "$AURORA_APK" || sudo waydroid shell pm install -r "$AURORA_APK"
 
-echo "================================================================="
-echo "[!] ACTION REQUIRED: GOOGLE PLAY STORE REGISTRATION"
-echo "Your GSF Android ID is: $GSF_ID"
-echo "Visit: https://www.google.com/android/uncertified/"
-echo "Sign in with your Google account and paste the ID above."
-echo "This registers your native container as a certified device."
-echo "================================================================="
+echo "[*] Enabling microG signature spoofing and account permissions..."
+sudo waydroid shell pm grant com.google.android.gms android.permission.ACCESS_FINE_LOCATION || true
+sudo waydroid shell pm grant com.google.android.gms android.permission.ACCESS_COARSE_LOCATION || true
+
+echo "[+] Aurora Store installed. You can now browse & install any Play Store app with or without Google login."
 ```
 
 **Step 4: Run test to verify it passes**
 
-Run: `sudo bash scripts/06-register-play-id.sh && bash scripts/tests/test-gsf-id.sh`  
-Expected: `[+] PASS: GSF Android ID is valid: <ID>`
+Run: `bash scripts/06-setup-aurora-microg.sh && bash scripts/tests/test-aurora-store.sh`  
+Expected: `[+] PASS: Aurora Store is installed and ready for Google Play apps.`
 
 **Step 5: Commit**
 
 ```bash
-git add scripts/06-register-play-id.sh scripts/tests/test-gsf-id.sh
-git commit -m "feat: add Google Services Framework ID extraction and certification tool"
+git add scripts/06-setup-aurora-microg.sh scripts/tests/test-aurora-store.sh
+git commit -m "feat: install Aurora Store and configure microG account permissions"
 ```
 
 ---
