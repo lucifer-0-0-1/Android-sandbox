@@ -8,12 +8,18 @@ AURORA_APK="/tmp/AuroraStore.apk"
 if [[ ! -f "$AURORA_APK" ]]; then
     echo "[*] Downloading latest stable Aurora Store APK..."
     curl -sSL "https://auroraoss.com/downloads/AuroraStore/Release/AuroraStore-4.6.4.apk" -o "$AURORA_APK" || \
-    curl -sSL "https://f-droid.org/repo/com.aurora.store_59.apk" -o "$AURORA_APK" || true
+    curl -sSL "https://f-droid.org/repo/com.aurora.store_61.apk" -o "$AURORA_APK" || true
 fi
 
 if [[ -f "$AURORA_APK" ]]; then
-    echo "[*] Installing Aurora Store into Waydroid..."
-    waydroid app install "$AURORA_APK" 2>/dev/null || sudo waydroid shell pm install -r "$AURORA_APK" 2>/dev/null || true
+    echo "[*] Installing Aurora Store into Android container..."
+    if waydroid status 2>/dev/null | grep -q "RUNNING"; then
+        waydroid app install "$AURORA_APK" || sudo waydroid shell pm install -r "$AURORA_APK"
+    else
+        echo "[!] Waydroid session not active. Starting session..."
+        sudo systemctl start waydroid-container 2>/dev/null || true
+        sudo waydroid shell pm install -r "$AURORA_APK" || true
+    fi
 fi
 
 echo "[*] Granting microG permissions..."

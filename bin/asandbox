@@ -34,6 +34,8 @@ Disposable Sandboxes (ReDroid):
   disposable reset   Wipe the disposable sandbox back to a clean slate
 
 Utilities:
+  install-store      Download and install Aurora Store (Google Play client)
+  fix-network        Fix internet/DNS routing and firewall rules for the container
   shared             Open the host-container shared folder
 EOF
 }
@@ -42,6 +44,12 @@ cmd="${1:-help}"
 shift || true
 
 case "$cmd" in
+    install-store)
+        bash "$SCRIPT_ROOT/scripts/06-setup-aurora-microg.sh"
+        ;;
+    fix-network)
+        bash "$SCRIPT_ROOT/scripts/fix-network.sh"
+        ;;
     setup)
         echo "=== Running Android Sandbox Full Setup ==="
         bash "$SCRIPT_ROOT/scripts/01-setup-kernel-binder.sh"
@@ -56,7 +64,16 @@ case "$cmd" in
         echo "[+] Complete setup finished successfully!"
         ;;
     start)
-        sudo systemctl start waydroid-container
+        if ! mountpoint -q /dev/binderfs 2>/dev/null; then
+            echo "[*] Mounting binderfs on-demand..."
+            sudo mkdir -p /dev/binderfs
+            sudo mount -t binder none /dev/binderfs
+        fi
+        echo "[*] Setting user read/write permissions on binder devices..."
+        sudo chmod 0755 /dev/binderfs /dev/binderfs/features 2>/dev/null || true
+        sudo chmod 0666 /dev/binderfs/binder /dev/binderfs/hwbinder /dev/binderfs/vndbinder /dev/binderfs/binder-control /dev/binder /dev/hwbinder /dev/vndbinder 2>/dev/null || true
+        sudo systemctl restart waydroid-container
+        sleep 2
         waydroid session start &
         echo "[+] Waydroid session started."
         ;;

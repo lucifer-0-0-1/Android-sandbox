@@ -1,7 +1,5 @@
 # Native Android Sandbox Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Build a high-performance, lightweight, containerized native Android sandbox environment on Linux with direct hardware GPU acceleration, ARM64 translation, retail device spoofing, and comprehensive anti-detection to run Android apps as if they are running on a physical Android device.
 
 **Architecture:** A dual-engine native container architecture: (1) **Waydroid Core Engine** (LXC + BinderFS + Wayland + Mesa DRI) for seamless daily desktop use with multi-window and full-screen modes, and (2) **ReDroid Isolated Engine** (Docker + Scrcpy) for disposable, multi-instance isolated sandboxing. The environment is augmented with Intel `libhoudini` / Google `libndk` ARM translation, Magisk/Zygisk + Shamiko root cloaking, Play Integrity certification spoofing, fake battery/telephony sensor stubs, and a unified management CLI.
